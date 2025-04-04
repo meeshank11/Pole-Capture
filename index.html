@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -33,19 +33,43 @@
         }
         #map {
             flex: 1;
-            height: calc(100vh - 60px);
+            height: calc(100vh - 100px); /* Adjusted for controls */
         }
         #controls {
             position: absolute;
-            top: 110px; /* Moved down to avoid zoom controls */
-            left: 20px;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 1001;
             display: flex;
-            flex-direction: column;
-            gap: 10px;
+            flex-direction: row;
+            gap: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #confirm-location {
+            position: absolute;
+            top: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            display: none;
+            padding: 10px 20px;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #confirm-location:hover {
+            background: #1565c0;
         }
         .button {
-            padding: 12px 20px;
+            padding: 10px 20px;
             background: #1976d2; /* Blue theme for buttons */
             color: white;
             border: none;
@@ -79,9 +103,10 @@
             border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             z-index: 1001;
-            width: 250px;
-            top: 110px;
-            left: 150px; /* Adjusted to not overlap controls */
+            width: 300px;
+            top: 150px;
+            left: 50%;
+            transform: translateX(-50%);
         }
         #pole-form h3 {
             margin: 0 0 10px;
@@ -108,21 +133,28 @@
             z-index: 1001;
         }
         @media (max-width: 768px) {
-            #map { height: calc(100vh - 60px); }
+            #map { height: calc(100vh - 120px); }
             #header h1 { font-size: 18px; }
+            #controls { 
+                top: 50px; 
+                flex-direction: column; 
+                gap: 10px; 
+                width: 90%; 
+                max-width: 300px; 
+            }
             #pole-form { 
                 width: 90%; 
                 max-width: 300px; 
-                left: 20px; 
-                top: 270px; /* Adjusted for mobile */
+                top: 200px; 
             }
-            #controls { 
-                top: 100px; /* Adjusted for mobile */
-                left: 10px; 
+            #confirm-location { 
+                top: 200px; 
+                font-size: 14px; 
+                padding: 8px 15px; 
             }
             .button { 
                 font-size: 14px; 
-                padding: 10px 15px; 
+                padding: 8px 15px; 
             }
         }
     </style>
@@ -143,6 +175,9 @@
         <button class="button" onclick="exportToExcel()">Generate Report</button>
     </div>
 
+    <!-- Confirm Location Button -->
+    <button id="confirm-location" onclick="confirmLocation()">Confirm Location</button>
+
     <!-- Pole Form -->
     <div id="pole-form">
         <h3>Add Pole</h3>
@@ -150,6 +185,9 @@
         <input type="text" id="dt" placeholder="Connected DT">
         <input type="text" id="longitude" placeholder="Longitude" readonly>
         <input type="text" id="latitude" placeholder="Latitude" readonly>
+        <input type="text" id="date-time" placeholder="Date & Time" readonly>
+        <input type="text" id="tsuisl-officer" placeholder="TSUISL Officer" value="Rahul Kumar">
+        <input type="text" id="gis-officer" placeholder="GIS Officer" value="Meeshank Lal Jaiwardhan">
         <button class="button" onclick="confirmPole()">Confirm</button>
         <button class="button" onclick="cancelPole()">Cancel</button>
     </div>
@@ -174,8 +212,9 @@
         const poles = [];
         const poleLayer = L.layerGroup().addTo(map);
         let tempMarker = null;
+        let tempLatLng = null;
 
-        // Custom Red Marker Icon (using Leaflet's default with red tint)
+        // Custom Red Marker Icon
         const redMarkerIcon = L.icon({
             iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
             iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -184,13 +223,9 @@
             iconAnchor: [12, 41],
             popupAnchor: [1, -34],
             shadowSize: [41, 41],
-            className: 'red-marker' // Custom class for CSS tint
+            className: 'red-marker'
         });
-
-        // Add CSS to tint the marker red
-        const style = document.createElement('style');
-        style.textContent = '.red-marker { filter: hue-rotate(0deg) saturate(100%) brightness(80%); }';
-        document.head.appendChild(style);
+        document.head.appendChild(document.createElement('style')).textContent = '.red-marker { filter: hue-rotate(0deg) saturate(100%) brightness(80%); }';
 
         // Start Add Pole Process
         function startAddPole() {
@@ -218,16 +253,33 @@
                 icon: redMarkerIcon
             }).addTo(map);
 
+            tempLatLng = { lat, lng };
             tempMarker.on('dragend', (e) => {
-                const coords = e.target.getLatLng();
-                document.getElementById('latitude').value = coords.lat.toFixed(6);
-                document.getElementById('longitude').value = coords.lng.toFixed(6);
+                tempLatLng = e.target.getLatLng();
             });
 
-            document.getElementById('latitude').value = lat.toFixed(6);
-            document.getElementById('longitude').value = lng.toFixed(6);
+            document.getElementById('confirm-location').style.display = 'block';
+            document.getElementById('pole-form').style.display = 'none';
+        }
+
+        // Confirm Location
+        function confirmLocation() {
+            if (tempMarker) {
+                showPoleForm();
+                document.getElementById('confirm-location').style.display = 'none';
+            }
+        }
+
+        // Show Pole Form
+        function showPoleForm() {
+            const now = new Date();
+            document.getElementById('latitude').value = tempLatLng.lat.toFixed(6);
+            document.getElementById('longitude').value = tempLatLng.lng.toFixed(6);
             document.getElementById('pole-number').value = '';
             document.getElementById('dt').value = '';
+            document.getElementById('date-time').value = now.toLocaleString();
+            document.getElementById('tsuisl-officer').value = "Rahul Kumar";
+            document.getElementById('gis-officer').value = "Meeshank Lal Jaiwardhan";
             document.getElementById('pole-form').style.display = 'block';
         }
 
@@ -237,17 +289,20 @@
             const dt = document.getElementById('dt').value;
             const lat = parseFloat(document.getElementById('latitude').value);
             const lng = parseFloat(document.getElementById('longitude').value);
+            const dateTime = document.getElementById('date-time').value;
+            const tsuislOfficer = document.getElementById('tsuisl-officer').value;
+            const gisOfficer = document.getElementById('gis-officer').value;
 
             if (!poleNumber || !lat || !lng) {
                 alert("Please fill in all required fields.");
                 return;
             }
 
-            const pole = { lat, lng, number: poleNumber, connectedDT: dt };
+            const pole = { lat, lng, number: poleNumber, connectedDT: dt, dateTime, tsuislOfficer, gisOfficer };
             poles.push(pole);
 
             const marker = L.marker([lat, lng], { icon: redMarkerIcon })
-                .bindPopup(`<b>Pole</b><br>Number: ${poleNumber}<br>Connected DT: ${dt}<br>Lat: ${lat}<br>Lng: ${lng}<br><button class="delete-btn" onclick="deletePole('${poleNumber}')">Delete</button>`)
+                .bindPopup(`<b>Pole</b><br>Number: ${poleNumber}<br>Connected DT: ${dt}<br>Lat: ${lat}<br>Lng: ${lng}<br>Date: ${dateTime}<br>TSUISL Officer: ${tsuislOfficer}<br>GIS Officer: ${gisOfficer}<br><button class="delete-btn" onclick="deletePole('${poleNumber}')">Delete</button>`)
                 .addTo(poleLayer);
 
             document.getElementById('pole-form').style.display = 'none';
@@ -264,6 +319,7 @@
                 map.removeLayer(tempMarker);
                 tempMarker = null;
             }
+            document.getElementById('confirm-location').style.display = 'none';
         }
 
         // Locate Me
@@ -308,7 +364,10 @@
                 "Pole Number": pole.number,
                 "Connected DT": pole.connectedDT,
                 "Longitude": pole.lng,
-                "Latitude": pole.lat
+                "Latitude": pole.lat,
+                "Date & Time": pole.dateTime,
+                "TSUISL Officer": pole.tsuislOfficer,
+                "GIS Officer": pole.gisOfficer
             }));
             const ws = XLSX.utils.json_to_sheet(wsData);
             XLSX.utils.book_append_sheet(wb, ws, "Poles");
