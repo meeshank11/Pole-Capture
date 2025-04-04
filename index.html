@@ -1,0 +1,319 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pole Capture App</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Custom CSS -->
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            background: #d32f2f; /* Red theme for header */
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1002;
+        }
+        #header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+        #map {
+            flex: 1;
+            height: calc(100vh - 60px);
+        }
+        #controls {
+            position: absolute;
+            top: 110px; /* Moved down to avoid zoom controls */
+            left: 20px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .button {
+            padding: 12px 20px;
+            background: #1976d2; /* Blue theme for buttons */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .button:hover {
+            background: #1565c0;
+        }
+        .delete-btn {
+            padding: 5px 10px;
+            background: #d32f2f; /* Red for delete */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 5px;
+            transition: background 0.2s;
+        }
+        .delete-btn:hover {
+            background: #b71c1c;
+        }
+        #pole-form {
+            display: none;
+            position: absolute;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1001;
+            width: 250px;
+            top: 110px;
+            left: 150px; /* Adjusted to not overlap controls */
+        }
+        #pole-form h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #d32f2f; /* Red for form header */
+        }
+        #pole-form input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        #pole-form input[readonly] {
+            background: #f5f5f5;
+        }
+        #created-by {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 12px;
+            color: #666;
+            z-index: 1001;
+        }
+        @media (max-width: 768px) {
+            #map { height: calc(100vh - 60px); }
+            #header h1 { font-size: 18px; }
+            #pole-form { 
+                width: 90%; 
+                max-width: 300px; 
+                left: 20px; 
+                top: 270px; /* Adjusted for mobile */
+            }
+            #controls { 
+                top: 100px; /* Adjusted for mobile */
+                left: 10px; 
+            }
+            .button { 
+                font-size: 14px; 
+                padding: 10px 15px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div id="header">
+        <h1>Pole Capture App</h1>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <button class="button" onclick="startAddPole()">Add Pole</button>
+        <button class="button" onclick="locateMe()">Locate Me</button>
+        <button class="button" onclick="exportToExcel()">Generate Report</button>
+    </div>
+
+    <!-- Pole Form -->
+    <div id="pole-form">
+        <h3>Add Pole</h3>
+        <input type="text" id="pole-number" placeholder="Pole Number">
+        <input type="text" id="dt" placeholder="Connected DT">
+        <input type="text" id="longitude" placeholder="Longitude" readonly>
+        <input type="text" id="latitude" placeholder="Latitude" readonly>
+        <button class="button" onclick="confirmPole()">Confirm</button>
+        <button class="button" onclick="cancelPole()">Cancel</button>
+    </div>
+
+    <!-- Created By -->
+    <div id="created-by">Created by MSK</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        // Initialize the map with default location [22.785269, 86.137259]
+        const map = L.map('map').setView([22.785269, 86.137259], 15);
+        L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: 'Map data © Google'
+        }).addTo(map);
+
+        // Pole Data
+        const poles = [];
+        const poleLayer = L.layerGroup().addTo(map);
+        let tempMarker = null;
+
+        // Custom Red Marker Icon (using Leaflet's default with red tint)
+        const redMarkerIcon = L.icon({
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41],
+            className: 'red-marker' // Custom class for CSS tint
+        });
+
+        // Add CSS to tint the marker red
+        const style = document.createElement('style');
+        style.textContent = '.red-marker { filter: hue-rotate(0deg) saturate(100%) brightness(80%); }';
+        document.head.appendChild(style);
+
+        // Start Add Pole Process
+        function startAddPole() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    map.setView([lat, lng], 15);
+                    addTempMarker(lat, lng);
+                }, () => {
+                    alert("Unable to retrieve location. Using default.");
+                    addTempMarker(22.785269, 86.137259);
+                });
+            } else {
+                alert("Geolocation not supported. Using default.");
+                addTempMarker(22.785269, 86.137259);
+            }
+        }
+
+        // Add Temporary Draggable Marker
+        function addTempMarker(lat, lng) {
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = L.marker([lat, lng], {
+                draggable: true,
+                icon: redMarkerIcon
+            }).addTo(map);
+
+            tempMarker.on('dragend', (e) => {
+                const coords = e.target.getLatLng();
+                document.getElementById('latitude').value = coords.lat.toFixed(6);
+                document.getElementById('longitude').value = coords.lng.toFixed(6);
+            });
+
+            document.getElementById('latitude').value = lat.toFixed(6);
+            document.getElementById('longitude').value = lng.toFixed(6);
+            document.getElementById('pole-number').value = '';
+            document.getElementById('dt').value = '';
+            document.getElementById('pole-form').style.display = 'block';
+        }
+
+        // Confirm Pole
+        function confirmPole() {
+            const poleNumber = document.getElementById('pole-number').value;
+            const dt = document.getElementById('dt').value;
+            const lat = parseFloat(document.getElementById('latitude').value);
+            const lng = parseFloat(document.getElementById('longitude').value);
+
+            if (!poleNumber || !lat || !lng) {
+                alert("Please fill in all required fields.");
+                return;
+            }
+
+            const pole = { lat, lng, number: poleNumber, connectedDT: dt };
+            poles.push(pole);
+
+            const marker = L.marker([lat, lng], { icon: redMarkerIcon })
+                .bindPopup(`<b>Pole</b><br>Number: ${poleNumber}<br>Connected DT: ${dt}<br>Lat: ${lat}<br>Lng: ${lng}<br><button class="delete-btn" onclick="deletePole('${poleNumber}')">Delete</button>`)
+                .addTo(poleLayer);
+
+            document.getElementById('pole-form').style.display = 'none';
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                tempMarker = null;
+            }
+        }
+
+        // Cancel Pole
+        function cancelPole() {
+            document.getElementById('pole-form').style.display = 'none';
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                tempMarker = null;
+            }
+        }
+
+        // Locate Me
+        function locateMe() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    map.setView([lat, lng], 15);
+                    L.marker([lat, lng], { icon: redMarkerIcon }).addTo(map).bindPopup("You are here!").openPopup();
+                }, () => {
+                    alert("Unable to retrieve location.");
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        // Delete Pole
+        function deletePole(poleNumber) {
+            const index = poles.findIndex(pole => pole.number === poleNumber);
+            if (index !== -1) {
+                poles.splice(index, 1);
+                poleLayer.eachLayer(layer => {
+                    const popupContent = layer.getPopup().getContent();
+                    if (popupContent.includes(`Number: ${poleNumber}`)) {
+                        poleLayer.removeLayer(layer);
+                    }
+                });
+            }
+        }
+
+        // Export to Excel
+        function exportToExcel() {
+            if (poles.length === 0) {
+                alert("No poles to export.");
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const wsData = poles.map(pole => ({
+                "Pole Number": pole.number,
+                "Connected DT": pole.connectedDT,
+                "Longitude": pole.lng,
+                "Latitude": pole.lat
+            }));
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, "Poles");
+            XLSX.writeFile(wb, "Pole_Report.xlsx");
+        }
+    </script>
+</body>
+</html>
