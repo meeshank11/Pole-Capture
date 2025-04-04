@@ -121,8 +121,9 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
-        #pole-form input[readonly] {
+        #pole-form input[readonly], #pole-form input[disabled] {
             background: #f5f5f5;
+            color: #555;
         }
         #created-by {
             position: absolute;
@@ -158,6 +159,9 @@
             }
         }
     </style>
+    <!-- PWA Additions -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#d32f2f">
 </head>
 <body>
     <!-- Header -->
@@ -186,8 +190,8 @@
         <input type="text" id="longitude" placeholder="Longitude" readonly>
         <input type="text" id="latitude" placeholder="Latitude" readonly>
         <input type="text" id="date-time" placeholder="Date & Time" readonly>
-        <input type="text" id="tsuisl-officer" placeholder="TSUISL Officer" value="Rahul Kumar" readonly>
-        <input type="text" id="gis-officer" placeholder="GIS Officer" value="Meeshank Lal Jaiwardhan" readonly>
+        <input type="text" id="tsuisl-officer" placeholder="TSUISL Officer" value="Rahul Kumar" disabled>
+        <input type="text" id="gis-officer" placeholder="GIS Officer" value="Meeshank Lal Jaiwardhan" disabled>
         <button class="button" onclick="confirmPole()">Confirm</button>
         <button class="button" onclick="cancelPole()">Cancel</button>
     </div>
@@ -216,8 +220,8 @@
 
         // Custom Red Marker Icon
         const redMarkerIcon = L.icon({
-            iconUrl: 'https://img.icons8.com/?size=100&id=0x_62l9YmbK9&format=png&color=000000',
-            iconRetinaUrl: 'https://img.icons8.com/?size=100&id=0x_62l9YmbK9&format=png&color=000000',
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
             shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
             iconSize: [25, 41],
             iconAnchor: [12, 41],
@@ -278,8 +282,6 @@
             document.getElementById('pole-number').value = '';
             document.getElementById('dt').value = '';
             document.getElementById('date-time').value = now.toLocaleString();
-            document.getElementById('tsuisl-officer').value = "Rahul Kumar";
-            document.getElementById('gis-officer').value = "Meeshank Lal Jaiwardhan";
             document.getElementById('pole-form').style.display = 'block';
         }
 
@@ -290,8 +292,8 @@
             const lat = parseFloat(document.getElementById('latitude').value);
             const lng = parseFloat(document.getElementById('longitude').value);
             const dateTime = document.getElementById('date-time').value;
-            const tsuislOfficer = document.getElementById('tsuisl-officer').value;
-            const gisOfficer = document.getElementById('gis-officer').value;
+            const tsuislOfficer = "Rahul Kumar"; // Hardcoded value
+            const gisOfficer = "Meeshank Lal Jaiwardhan"; // Hardcoded value
 
             if (!poleNumber || !lat || !lng) {
                 alert("Please fill in all required fields.");
@@ -372,6 +374,16 @@
             const ws = XLSX.utils.json_to_sheet(wsData);
             XLSX.utils.book_append_sheet(wb, ws, "Poles");
             XLSX.writeFile(wb, "Pole_Report.xlsx");
+        }
+    </script>
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.log('Service Worker registration failed', err));
+            });
         }
     </script>
 </body>
